@@ -232,6 +232,13 @@ tbody tr:hover td{background:rgba(255,255,255,0.02);}
   <div class="sidebar-footer">
     <div class="sync-info"><span class="sync-dot"></span>Google Sheets<br><span id="sync-time" style="color:var(--text2);">conectando...</span></div>
     <button class="btn-reload" onclick="reloadAll()">↻ Atualizar dados</button>
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:6px;display:flex;align-items:center;gap:5px;">
+        <span id="fb-dot" style="width:6px;height:6px;border-radius:50%;background:var(--text3);display:inline-block;"></span>
+        <span id="fb-status">Firebase — aguardando</span>
+      </div>
+      <button onclick="salvarFirebase()" class="btn-reload" style="background:var(--orange-bg);border-color:var(--orange-border);color:var(--orange2);">💾 Salvar agora</button>
+    </div>
   </div>
 </aside>
 
@@ -307,6 +314,12 @@ CI.forEach(mi=>{camps[mi]={theme:'',resumo:'',open:false,orc:RES.map(()=>false),
 let activeTab='quadro';
 let garaFaixa={};
 let garaBanner={};
+
+// Campanhas extras (coringa)
+let extras=[
+  {ativa:false,mes:null,theme:'',resumo:'',orc:RES.map(()=>false),real:RES.map(()=>({sel:false,price:null,qty:null})),fotos:[],artes:{folder_frente:null,folder_verso:null,banner:null,faixa:null},open:false},
+  {ativa:false,mes:null,theme:'',resumo:'',orc:RES.map(()=>false),real:RES.map(()=>({sel:false,price:null,qty:null})),fotos:[],artes:{folder_frente:null,folder_verso:null,banner:null,faixa:null},open:false}
+];
 
 function getTotal(mi){return companies.reduce((s,c)=>s+(driverData[c]&&driverData[c][mi]||0),0);}
 function fmt(n){return(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -462,8 +475,203 @@ function renderCampanhas(){
       <div id="body-${mi}" style="display:${camp.open?'block':'none'};">${camp.open?renderBody(mi):''}</div>
     </div>`;
   });
+
+  // Campanhas extras
+  h+=`<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
+    <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.09em;color:var(--text3);padding:8px 4px 12px;">Campanhas extras</div>`;
+  extras.forEach((ex,ei)=>{
+    h+=renderExtraCard(ei);
+  });
+  h+=`</div>`;
+
   document.getElementById('pnl-campanhas').innerHTML=h;
 }
+
+function renderExtraCard(ei){
+  const ex=extras[ei];
+  const mi=ex.mes;
+  const tot=mi!==null?getTotal(mi):0;
+  const ot=ex.ativa&&mi!==null?calcExtraOrc(ei):0;
+  const rt=ex.ativa&&mi!==null?calcExtraReal(ei):0;
+
+  let h=`<div class="camp-card${ex.ativa&&ex.open?' open':''}" id="extra-card-${ei}" style="border-style:dashed;margin-bottom:10px;">
+    <div class="camp-header" style="cursor:default;">
+      <div class="camp-meta" style="gap:10px;flex:1;">
+        <span style="font-size:10px;font-weight:700;color:var(--text3);background:var(--bg3);border:1px solid var(--border2);padding:3px 8px;border-radius:5px;letter-spacing:0.05em;">EXTRA ${ei+1}</span>`;
+
+  if(ex.ativa){
+    // Seletor de mês
+    h+=`<select onchange="extras[${ei}].mes=parseInt(this.value);extras[${ei}].theme='';renderExtraInline(${ei})"
+      style="background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:5px 10px;font-size:12px;color:var(--text);font-family:'Inter',sans-serif;outline:none;cursor:pointer;">
+      <option value="" ${mi===null?'selected':''}>Selecione o mês...</option>`;
+    MS.forEach((m,idx)=>{h+=`<option value="${idx}" ${mi===idx?'selected':''}>${m} — ${MF[idx]}</option>`;});
+    h+=`</select>`;
+    if(mi!==null){
+      h+=`<span class="c-name" style="font-size:14px;">${MF[mi]}</span>`;
+      if(ex.theme)h+=`<span class="c-theme">${ex.theme}</span>`;
+    }
+  } else {
+    h+=`<span style="font-size:13px;color:var(--text3);font-style:italic;">Campanha extra não ativada</span>`;
+  }
+
+  h+=`</div>
+      <div style="display:flex;align-items:center;gap:14px;">`;
+
+  if(ex.ativa&&mi!==null){
+    h+=`<div class="c-totals">
+      <div class="ct-item"><div class="ctl">Orçado</div><div class="ctv" id="xhdr-orc-${ei}" style="color:${ot>0?'var(--orange2)':'var(--text3)'};">R$ ${fmt(ot)}</div></div>
+      <div class="ct-item"><div class="ctl">Realizado</div><div class="ctv" id="xhdr-real-${ei}" style="color:${rt>0?'var(--green)':'var(--text3)'};">R$ ${fmt(rt)}</div></div>
+    </div>`;
+    h+=`<svg class="chevron${ex.open?' open':''}" onclick="toggleExtraCard(${ei})" style="cursor:pointer;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>`;
+  }
+
+  // Toggle ON/OFF
+  const isOn=ex.ativa;
+  h+=`<div onclick="toggleExtra(${ei})" title="${isOn?'Desativar':'Ativar'} campanha extra"
+    style="width:40px;height:22px;border-radius:11px;background:${isOn?'var(--orange)':'var(--border2)'};position:relative;cursor:pointer;transition:background 0.2s;flex-shrink:0;">
+    <div style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:3px;left:${isOn?'21px':'3px'};transition:left 0.2s;"></div>
+  </div>`;
+
+  h+=`</div></div>`;
+
+  // Body se ativo e aberto e mês selecionado
+  if(ex.ativa&&ex.open&&mi!==null){
+    h+=`<div id="extra-body-${ei}" style="border-top:1px solid var(--border);">${renderExtraBody(ei)}</div>`;
+  } else {
+    h+=`<div id="extra-body-${ei}" style="display:none;"></div>`;
+  }
+
+  h+=`</div>`;
+  return h;
+}
+
+function toggleExtra(ei){
+  extras[ei].ativa=!extras[ei].ativa;
+  if(!extras[ei].ativa){extras[ei].open=false;extras[ei].mes=null;}
+  document.getElementById('extra-card-'+ei).outerHTML=renderExtraCard(ei);
+}
+
+function toggleExtraCard(ei){
+  const ex=extras[ei];
+  if(!ex.ativa||ex.mes===null)return;
+  ex.open=!ex.open;
+  const body=document.getElementById('extra-body-'+ei);
+  const card=document.getElementById('extra-card-'+ei);
+  if(body){if(ex.open){body.style.display='block';body.innerHTML=renderExtraBody(ei);}else body.style.display='none';}
+  if(card){const ch=card.querySelector('.chevron');if(ch)ch.className=ex.open?'chevron open':'chevron';}
+}
+
+function renderExtraInline(ei){
+  const card=document.getElementById('extra-card-'+ei);
+  if(card)card.outerHTML=renderExtraCard(ei);
+}
+
+function calcExtraOrc(ei){
+  const ex=extras[ei];const mi=ex.mes;if(mi===null)return 0;
+  const tot=getTotal(mi);
+  return ex.orc.reduce((s,sel,ri)=>sel?s+(resources[ri].price||0)*getQtdOrc(ri,mi):s,0);
+}
+function calcExtraReal(ei){
+  const ex=extras[ei];if(ex.mes===null)return 0;
+  return ex.real.reduce((s,r,ri)=>{if(!r.sel)return s;const p=r.price!==null?r.price:(resources[ri].price||0);const q=r.qty!==null?r.qty:0;return s+p*q;},0);
+}
+
+function refreshExtraHeader(ei){
+  const ot=calcExtraOrc(ei),rt=calcExtraReal(ei);
+  const ho=document.getElementById('xhdr-orc-'+ei);const hr=document.getElementById('xhdr-real-'+ei);
+  if(ho){ho.textContent='R$ '+fmt(ot);ho.style.color=ot>0?'var(--orange2)':'var(--text3)';}
+  if(hr){hr.textContent='R$ '+fmt(rt);hr.style.color=rt>0?'var(--green)':'var(--text3)';}
+}
+
+function toggleExtraOrc(ei,ri){extras[ei].orc[ri]=!extras[ei].orc[ri];if(extras[ei].open)document.getElementById('extra-body-'+ei).innerHTML=renderExtraBody(ei);refreshExtraHeader(ei);}
+function toggleExtraReal(ei,ri){extras[ei].real[ri].sel=!extras[ei].real[ri].sel;if(extras[ei].open)document.getElementById('extra-body-'+ei).innerHTML=renderExtraBody(ei);refreshExtraHeader(ei);}
+
+function renderExtraBody(ei){
+  const ex=extras[ei];const mi=ex.mes;const tot=getTotal(mi);
+  // Reutiliza a mesma lógica do renderBody mas com extra
+  let h=`<div class="camp-body">
+    <div style="margin-bottom:22px;display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;">
+      <div>
+        <div class="field-label">Tema da campanha</div>
+        <input class="inp" type="text" value="${ex.theme}" placeholder="Insira o tema..."
+          oninput="autoSave();extras[${ei}].theme=this.value">
+      </div>
+      <div>
+        <div class="field-label">Resumo da campanha</div>
+        <textarea class="inp" rows="2" placeholder="Descreva brevemente..."
+          style="resize:vertical;min-height:42px;font-family:'Inter',sans-serif;line-height:1.5;"
+          oninput="autoSave();extras[${ei}].resumo=this.value">${ex.resumo||''}</textarea>
+      </div>
+    </div>`;
+
+  // ORÇADO
+  h+=`<div class="sbox"><div class="sbox-title"><span class="dot dot-o"></span>Orçado <span style="margin-left:auto;font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0;">${fmtN(tot)} motoristas em ${MF[mi]}</span></div>
+    <div class="res-grid">`;
+  resources.forEach((res,ri)=>{const s=ex.orc[ri];h+=`<label class="chk-res${s?' sel-o':''}" onclick="toggleExtraOrc(${ei},${ri});return false;"><input type="checkbox" ${s?'checked':''} style="accent-color:var(--orange)" onchange="autoSave();toggleExtraOrc(${ei},${ri})">${res.name}</label>`;});
+  h+=`</div>`;
+  if(ex.orc.some(s=>s)){
+    h+=`<div class="tbl-wrap"><table><thead><tr><th>Recurso orçado</th><th class="r">Valor unit.</th><th class="r">Qtd.</th><th style="font-size:9px;color:var(--text3);font-weight:400;text-align:right;padding-right:8px;">base</th><th class="r">Total</th></tr></thead><tbody>`;
+    let ot=0;
+    ex.orc.forEach((sel,ri)=>{
+      if(!sel)return;const p=resources[ri].price||0;const q=getQtdOrc(ri,mi);const lbl=getQtdOrcLabel(ri);const sub=p*q;ot+=sub;
+      h+=`<tr><td style="font-weight:600;color:var(--text);">${resources[ri].name}</td><td class="r">${p>0?'R$ '+fmt(p):'<span style="color:var(--text3)">—</span>'}</td><td class="r" style="font-weight:600;">${fmtN(q)}</td><td style="text-align:right;padding-right:8px;"><span style="font-size:10px;color:var(--text3);background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;">${lbl}</span></td><td class="r" style="font-weight:700;color:${p>0?'var(--orange2)':'var(--text3)'};">${p>0?'R$ '+fmt(sub):'—'}</td></tr>`;
+    });
+    h+=`<tr class="total-row"><td colspan="4">Total orçado</td><td class="r" style="color:var(--orange2);">R$ ${fmt(ot)}</td></tr></tbody></table></div>`;
+  }
+  h+=`</div>`;
+
+  // REALIZADO
+  h+=`<div class="sbox"><div class="sbox-title"><span class="dot dot-g"></span>Realizado</div>
+    <div class="res-grid">`;
+  resources.forEach((res,ri)=>{const s=ex.real[ri].sel;h+=`<label class="chk-res${s?' sel-g':''}" onclick="toggleExtraReal(${ei},${ri});return false;"><input type="checkbox" ${s?'checked':''} style="accent-color:var(--green)" onchange="autoSave();toggleExtraReal(${ei},${ri})">${res.name}</label>`;});
+  h+=`</div>`;
+  if(ex.real.some(r=>r.sel)){
+    h+=`<div class="tbl-wrap"><table><thead><tr><th>Recurso utilizado</th><th class="r">Valor unit.</th><th class="r">Quantidade</th><th class="r">Total</th></tr></thead><tbody>`;
+    ex.real.forEach((r,ri)=>{
+      if(!r.sel)return;
+      const p=r.price!==null?r.price:(resources[ri].price||0);const q=r.qty!==null?r.qty:null;const sub=p&&q?p*q:0;
+      h+=`<tr><td style="font-weight:600;color:var(--text);">${resources[ri].name}</td>
+        <td class="r"><div style="display:flex;align-items:center;justify-content:flex-end;gap:5px;"><span style="font-size:11px;color:var(--text3);">R$</span><input class="edt g" type="number" min="0" step="0.01" value="${p||''}" placeholder="0,00" style="width:100px;" oninput="autoSave();extras[${ei}].real[${ri}].price=parseFloat(this.value)||0;refreshExtraHeader(${ei})"></div></td>
+        <td class="r"><input class="edt g" type="number" min="0" value="${q!==null?q:''}" placeholder="qtd." style="width:85px;" oninput="autoSave();extras[${ei}].real[${ri}].qty=parseInt(this.value)||0;refreshExtraHeader(${ei})"></td>
+        <td class="r" style="font-weight:700;color:var(--green);">${sub>0?'R$ '+fmt(sub):'—'}</td></tr>`;
+    });
+    const rt=calcExtraReal(ei);
+    h+=`<tr class="total-row"><td colspan="3">Total realizado</td><td class="r" style="color:var(--green);">R$ ${fmt(rt)}</td></tr></tbody></table></div>`;
+  }
+  h+=`</div>`;
+
+  // ARTES
+  h+=`<div class="sbox"><div class="sbox-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" style="flex-shrink:0;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Artes da campanha<span style="margin-left:auto;font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--text3);">Insira os arquivos PNG</span></div>
+    <div class="artes-grid">`;
+  ARTES_KEYS.forEach(key=>{
+    const src=ex.artes[key];const lbl=ARTES_LABELS[key];
+    h+=`<div class="arte-slot"><div class="arte-slot-label"><span>${lbl}</span>${src?`<span class="rm-arte" onclick="extras[${ei}].artes['${key}']=null;if(extras[${ei}].open)document.getElementById('extra-body-${ei}').innerHTML=renderExtraBody(${ei})">✕</span>`:''}</div>
+      <div class="arte-preview" onclick="document.getElementById('xarte-${ei}-${key}').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="event.preventDefault();this.classList.remove('drag-over');dropExtraArte(${ei},'${key}',event)">
+        ${src?`<img src="${src}">`:`<div class="upload-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>Clique ou arraste</span></div>`}
+        <input type="file" id="xarte-${ei}-${key}" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="addExtraArte(${ei},'${key}',this)">
+      </div></div>`;
+  });
+  h+=`</div></div>`;
+
+  // FOTOS
+  h+=`<div class="sbox"><div class="sbox-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" style="flex-shrink:0;"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>Fotos da campanha<span style="margin-left:auto;font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--text3);">Registro fotográfico</span></div>
+    <div class="foto-grid">`;
+  ex.fotos.forEach((src,fi)=>{h+=`<div class="foto-slot"><img src="${src}"><div class="rm-foto" onclick="extras[${ei}].fotos.splice(${fi},1);if(extras[${ei}].open)document.getElementById('extra-body-${ei}').innerHTML=renderExtraBody(${ei})">✕</div></div>`;});
+  if(ex.fotos.length<3){
+    h+=`<div class="foto-slot" onclick="document.getElementById('xfi-${ei}').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="event.preventDefault();this.classList.remove('drag-over');dropExtraFoto(${ei},event)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <span>Arraste ou clique — ${ex.fotos.length}/3</span>
+      <input type="file" id="xfi-${ei}" accept="image/*" style="display:none;" onchange="addExtraFoto(${ei},this)">
+    </div>`;
+  }
+  h+=`</div></div></div>`;
+  return h;
+}
+
+function addExtraArte(ei,key,input){const file=input.files[0];if(!file)return;const r=new FileReader();r.onload=e=>{extras[ei].artes[key]=e.target.result;if(extras[ei].open)document.getElementById('extra-body-'+ei).innerHTML=renderExtraBody(ei);};r.readAsDataURL(file);}
+function dropExtraArte(ei,key,ev){const file=ev.dataTransfer.files[0];if(!file||!file.type.startsWith('image/'))return;const r=new FileReader();r.onload=e=>{extras[ei].artes[key]=e.target.result;if(extras[ei].open)document.getElementById('extra-body-'+ei).innerHTML=renderExtraBody(ei);};r.readAsDataURL(file);}
+function addExtraFoto(ei,input){const file=input.files[0];if(!file||extras[ei].fotos.length>=3)return;const r=new FileReader();r.onload=e=>{extras[ei].fotos.push(e.target.result);if(extras[ei].open)document.getElementById('extra-body-'+ei).innerHTML=renderExtraBody(ei);};r.readAsDataURL(file);}
+function dropExtraFoto(ei,ev){const file=ev.dataTransfer.files[0];if(!file||!file.type.startsWith('image/')||extras[ei].fotos.length>=3)return;const r=new FileReader();r.onload=e=>{extras[ei].fotos.push(e.target.result);if(extras[ei].open)document.getElementById('extra-body-'+ei).innerHTML=renderExtraBody(ei);};r.readAsDataURL(file);}
 
 function renderBody(mi){
   const camp=camps[mi];const tot=getTotal(mi);
@@ -472,19 +680,19 @@ function renderBody(mi){
       <div>
         <div class="field-label">Tema da campanha <span class="f-badge">definir em ${PREV[mi]}</span></div>
         <input class="inp" type="text" value="${camp.theme}" placeholder="Insira o tema da campanha..."
-          oninput="camps[${mi}].theme=this.value;var e=document.getElementById('hdr-theme-${mi}');if(e)e.textContent=this.value||'Tema não definido'">
+          oninput="autoSave();camps[${mi}].theme=this.value;var e=document.getElementById('hdr-theme-${mi}');if(e)e.textContent=this.value||'Tema não definido'">
       </div>
       <div>
         <div class="field-label">Resumo da campanha</div>
         <textarea class="inp" rows="2" placeholder="Descreva brevemente a campanha..."
           style="resize:vertical;min-height:42px;font-family:'Inter',sans-serif;line-height:1.5;"
-          oninput="camps[${mi}].resumo=this.value">${camp.resumo||''}</textarea>
+          oninput="autoSave();camps[${mi}].resumo=this.value">${camp.resumo||''}</textarea>
       </div>
     </div>`;
   h+=`<div class="sbox">
     <div class="sbox-title"><span class="dot dot-o"></span>Orçado <span style="margin-left:auto;font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0;">${fmtN(tot)} motoristas</span></div>
     <div class="res-grid">`;
-  resources.forEach((res,ri)=>{const s=camp.orc[ri];h+=`<label class="chk-res${s?' sel-o':''}" onclick="toggleOrc(${mi},${ri});return false;"><input type="checkbox" ${s?'checked':''} style="accent-color:var(--orange)" onchange="toggleOrc(${mi},${ri})">${res.name}</label>`;});
+  resources.forEach((res,ri)=>{const s=camp.orc[ri];h+=`<label class="chk-res${s?' sel-o':''}" onclick="toggleOrc(${mi},${ri});return false;"><input type="checkbox" ${s?'checked':''} style="accent-color:var(--orange)" onchange="autoSave();toggleOrc(${mi},${ri})">${res.name}</label>`;});
   h+=`</div>`;
   if(camp.orc.some(s=>s)){
     h+=`<div class="tbl-wrap"><table><thead><tr><th>Recurso orçado</th><th class="r">Valor unit.</th><th class="r">Qtd.</th><th style="font-size:9px;color:var(--text3);font-weight:400;text-align:right;padding-right:8px;">base</th><th class="r">Total</th></tr></thead><tbody>`;
@@ -510,7 +718,7 @@ function renderBody(mi){
   h+=`<div class="sbox">
     <div class="sbox-title"><span class="dot dot-g"></span>Realizado</div>
     <div class="res-grid">`;
-  resources.forEach((res,ri)=>{const s=camp.real[ri].sel;h+=`<label class="chk-res${s?' sel-g':''}" onclick="toggleReal(${mi},${ri});return false;"><input type="checkbox" ${s?'checked':''} style="accent-color:var(--green)" onchange="toggleReal(${mi},${ri})">${res.name}</label>`;});
+  resources.forEach((res,ri)=>{const s=camp.real[ri].sel;h+=`<label class="chk-res${s?' sel-g':''}" onclick="toggleReal(${mi},${ri});return false;"><input type="checkbox" ${s?'checked':''} style="accent-color:var(--green)" onchange="autoSave();toggleReal(${mi},${ri})">${res.name}</label>`;});
   h+=`</div>`;
   if(camp.real.some(r=>r.sel)){
     h+=`<div class="tbl-wrap"><table><thead><tr><th>Recurso utilizado</th><th class="r">Valor unit.</th><th class="r">Quantidade</th><th class="r">Total</th></tr></thead><tbody>`;
@@ -523,11 +731,11 @@ function renderBody(mi){
         <td style="font-weight:600;color:var(--text);">${resources[ri].name}</td>
         <td class="r"><div style="display:flex;align-items:center;justify-content:flex-end;gap:5px;"><span style="font-size:11px;color:var(--text3);">R$</span>
           <input class="edt g" type="number" min="0" step="0.01" value="${p!==null?p:''}" placeholder="0,00" style="width:100px;"
-            oninput="camps[${mi}].real[${ri}].price=this.value!==''?parseFloat(this.value):null;updateRealRow(${mi},${ri});refreshHeader(${mi});updMetrics()">
+            oninput="autoSave();camps[${mi}].real[${ri}].price=this.value!==''?parseFloat(this.value):null;updateRealRow(${mi},${ri});refreshHeader(${mi});updMetrics()">
         </div></td>
         <td class="r">
           <input class="edt g" type="number" min="0" value="${q!==null?q:''}" placeholder="qtd." style="width:85px;"
-            oninput="camps[${mi}].real[${ri}].qty=this.value!==''?parseInt(this.value):null;updateRealRow(${mi},${ri});refreshHeader(${mi});updMetrics()">
+            oninput="autoSave();camps[${mi}].real[${ri}].qty=this.value!==''?parseInt(this.value):null;updateRealRow(${mi},${ri});refreshHeader(${mi});updMetrics()">
         </td>
         <td class="r" id="real-sub-${mi}-${ri}" style="font-weight:700;color:var(--green);">${sub>0?'R$ '+fmt(sub):'—'}</td>
       </tr>`;
@@ -1029,54 +1237,233 @@ function refreshHeader(mi){
 function refreshAllHeaders(){CI.forEach(mi=>refreshHeader(mi));updMetrics();}
 
 /* ── LOAD ── */
+const FETCH_TIMEOUT=8000; // 8 segundos — ajuste se necessário
+
+function fetchComTimeout(url,opts={}){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),FETCH_TIMEOUT);
+  return fetch(url,{...opts,signal:controller.signal}).finally(()=>clearTimeout(timer));
+}
+
 async function reloadAll(){
   const btn=document.querySelector('.btn-reload');
   if(btn){btn.textContent='Atualizando...';btn.disabled=true;}
-  try{
-    await Promise.all([loadMot(),loadFaixa(),loadBanner()]);
-    if(activeTab==='quadro')document.getElementById('mrow').style.display='grid';
-  }catch(e){alert('Erro ao atualizar. Verifique a conexão.');}
-  finally{if(btn){btn.textContent='↻ Atualizar dados';btn.disabled=false;}}
+  await Promise.allSettled([loadMot(),loadFaixa(),loadBanner()]);
+  if(activeTab==='quadro')document.getElementById('mrow').style.display='grid';
+  if(btn){btn.textContent='↻ Atualizar dados';btn.disabled=false;}
 }
 
 async function loadMot(){
-  const r=await fetch(CSV_MOT,{cache:'no-store'});
-  const t=await r.text();parseMot(t);
+  try{
+    const r=await fetchComTimeout(CSV_MOT,{cache:'no-store'});
+    const t=await r.text();parseMot(t);
+  }catch(e){
+    document.getElementById('pnl-quadro').innerHTML=errMsg('Quadro de motoristas indisponível','Firewall ou conexão bloqueou o acesso ao Google Sheets.');
+  }
 }
 
 async function loadFaixa(){
-  const r=await fetch(CSV_FAIXA,{cache:'no-store'});
-  const t=await r.text();
-  garaFaixa=parseGaragens(t,EMPRESAS);
-  document.getElementById('pnl-gfaixa').innerHTML=renderGaragens(garaFaixa,'faixa');
+  try{
+    const r=await fetchComTimeout(CSV_FAIXA,{cache:'no-store'});
+    const t=await r.text();
+    garaFaixa=parseGaragens(t,EMPRESAS);
+    document.getElementById('pnl-gfaixa').innerHTML=renderGaragens(garaFaixa,'faixa');
+  }catch(e){
+    document.getElementById('pnl-gfaixa').innerHTML=errMsg('Garagens Faixa indisponível','Não foi possível carregar os dados.');
+  }
 }
 
 async function loadBanner(){
-  const r=await fetch(CSV_BANNER,{cache:'no-store'});
-  const t=await r.text();
-  garaBanner=parseGaragens(t,EMPRESAS);
-  document.getElementById('pnl-gbanner').innerHTML=renderGaragens(garaBanner,'banner');
+  try{
+    const r=await fetchComTimeout(CSV_BANNER,{cache:'no-store'});
+    const t=await r.text();
+    garaBanner=parseGaragens(t,EMPRESAS);
+    document.getElementById('pnl-gbanner').innerHTML=renderGaragens(garaBanner,'banner');
+  }catch(e){
+    document.getElementById('pnl-gbanner').innerHTML=errMsg('Garagens Banner indisponível','Não foi possível carregar os dados.');
+  }
+}
+
+function errMsg(titulo,sub){
+  return `<div style="text-align:center;padding:48px 24px;">
+    <div style="font-size:32px;margin-bottom:10px;">📡</div>
+    <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px;">${titulo}</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;max-width:320px;margin-left:auto;margin-right:auto;line-height:1.6;">${sub}<br>Verifique a conexão ou use uma rede sem restrições corporativas.</div>
+    <button onclick="reloadAll()" class="btn-reload" style="width:auto;padding:8px 20px;">↻ Tentar novamente</button>
+  </div>`;
 }
 
 /* ── INIT ── */
 renderRecursos();
+renderCampanhas();
 document.getElementById('pnl-quadro').innerHTML=`<div class="loader-screen"><div class="spinner"></div><span style="font-size:13px;color:var(--text3);">Conectando ao Google Sheets...</span></div>`;
 document.getElementById('pnl-gfaixa').innerHTML=`<div class="loader-screen"><div class="spinner"></div><span style="font-size:13px;color:var(--text3);">Carregando garagens...</span></div>`;
 document.getElementById('pnl-gbanner').innerHTML=`<div class="loader-screen"><div class="spinner"></div><span style="font-size:13px;color:var(--text3);">Carregando garagens...</span></div>`;
 
-Promise.all([
-  fetch(CSV_MOT).then(r=>r.text()).then(t=>parseMot(t)),
-  fetch(CSV_FAIXA).then(r=>r.text()).then(t=>{garaFaixa=parseGaragens(t,EMPRESAS);document.getElementById('pnl-gfaixa').innerHTML=renderGaragens(garaFaixa,'faixa');}),
-  fetch(CSV_BANNER).then(r=>r.text()).then(t=>{garaBanner=parseGaragens(t,EMPRESAS);document.getElementById('pnl-gbanner').innerHTML=renderGaragens(garaBanner,'banner');})
-]).catch(e=>{
-  console.error(e);
-  document.getElementById('pnl-quadro').innerHTML=`<div class="loader-screen">
-    <div style="font-size:36px;">⚠</div>
-    <div style="font-size:14px;font-weight:600;">Não foi possível carregar os dados</div>
-    <div style="font-size:12px;color:var(--text3);">Verifique se as planilhas estão publicadas.</div>
-    <button onclick="location.reload()" class="btn-reload" style="width:auto;padding:8px 20px;margin-top:8px;">Tentar novamente</button>
-  </div>`;
-});
+// Carrega cada fonte independentemente — se uma falhar não trava as outras
+loadMot();
+loadFaixa();
+loadBanner();
+</script>
+
+<!-- Firebase SDK -->
+<script type="module">
+import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import{getFirestore,doc,setDoc,getDoc,collection}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const firebaseConfig={
+  apiKey:"AIzaSyBMv5cxvPOabS24fVDLULUm9dMSnkRryJU",
+  authDomain:"campanhas-seguranca.firebaseapp.com",
+  projectId:"campanhas-seguranca",
+  storageBucket:"campanhas-seguranca.firebasestorage.app",
+  messagingSenderId:"58158489834",
+  appId:"1:58158489834:web:68751421373822eea37793"
+};
+
+const app=initializeApp(firebaseConfig);
+const db=getFirestore(app);
+
+function fbStatus(msg,cor){
+  const dot=document.getElementById('fb-dot');
+  const st=document.getElementById('fb-status');
+  if(dot)dot.style.background=cor;
+  if(st)st.textContent=msg;
+}
+
+/* ── SALVAR ── */
+window.salvarFirebase=async function(){
+  fbStatus('Salvando...','#f0a947');
+  try{
+    // Recursos
+    const resData={};
+    resources.forEach((r,i)=>resData[i]={name:r.name,price:r.price});
+    await setDoc(doc(db,'orcamento','recursos'),{data:resData,ts:Date.now()});
+
+    // Campanhas — texto e seleções sem imagens
+    const campsData={};
+    CI.forEach(mi=>{
+      const c=camps[mi];
+      campsData[mi]={
+        theme:c.theme||'',
+        resumo:c.resumo||'',
+        orc:c.orc,
+        real:c.real.map(r=>({sel:r.sel,price:r.price,qty:r.qty}))
+      };
+    });
+    await setDoc(doc(db,'orcamento','campanhas'),{data:campsData,ts:Date.now()});
+
+    // Extras
+    const extrasData=extras.map(ex=>({
+      ativa:ex.ativa,mes:ex.mes,theme:ex.theme||'',resumo:ex.resumo||'',
+      orc:ex.orc,
+      real:ex.real.map(r=>({sel:r.sel,price:r.price,qty:r.qty}))
+    }));
+    await setDoc(doc(db,'orcamento','extras'),{data:extrasData,ts:Date.now()});
+
+    // Artes por mês (docs separados para não estourar limite)
+    for(const mi of CI){
+      const a=camps[mi].artes;
+      const f=camps[mi].fotos;
+      await setDoc(doc(db,'orcamento','artes_'+mi),{artes:a,fotos:f,ts:Date.now()});
+    }
+
+    // Artes extras
+    for(let ei=0;ei<extras.length;ei++){
+      await setDoc(doc(db,'orcamento','xartes_'+ei),{artes:extras[ei].artes,fotos:extras[ei].fotos,ts:Date.now()});
+    }
+
+    fbStatus('Salvo ✓','#18b87a');
+    setTimeout(()=>fbStatus('Firebase conectado','#18b87a'),3000);
+  }catch(e){
+    console.error(e);
+    fbStatus('Erro ao salvar','#e05555');
+  }
+};
+
+/* ── CARREGAR ── */
+async function carregarFirebase(){
+  fbStatus('Carregando...','#f0a947');
+  try{
+    // Recursos
+    const resSnap=await getDoc(doc(db,'orcamento','recursos'));
+    if(resSnap.exists()){
+      const d=resSnap.data().data;
+      Object.keys(d).forEach(i=>{if(resources[i])resources[i].price=d[i].price||0;});
+      renderRecursos();
+    }
+
+    // Campanhas
+    const campSnap=await getDoc(doc(db,'orcamento','campanhas'));
+    if(campSnap.exists()){
+      const d=campSnap.data().data;
+      Object.keys(d).forEach(mi=>{
+        const m=parseInt(mi);
+        if(camps[m]){
+          camps[m].theme=d[mi].theme||'';
+          camps[m].resumo=d[mi].resumo||'';
+          camps[m].orc=d[mi].orc||RES.map(()=>false);
+          camps[m].real=(d[mi].real||[]).map(r=>({sel:r.sel||false,price:r.price??null,qty:r.qty??null}));
+        }
+      });
+      renderCampanhas();
+    }
+
+    // Extras
+    const extSnap=await getDoc(doc(db,'orcamento','extras'));
+    if(extSnap.exists()){
+      const d=extSnap.data().data;
+      d.forEach((ex,ei)=>{
+        if(extras[ei]){
+          extras[ei].ativa=ex.ativa||false;
+          extras[ei].mes=ex.mes??null;
+          extras[ei].theme=ex.theme||'';
+          extras[ei].resumo=ex.resumo||'';
+          extras[ei].orc=ex.orc||RES.map(()=>false);
+          extras[ei].real=(ex.real||[]).map(r=>({sel:r.sel||false,price:r.price??null,qty:r.qty??null}));
+        }
+      });
+    }
+
+    // Artes por mês
+    for(const mi of CI){
+      const aSnap=await getDoc(doc(db,'orcamento','artes_'+mi));
+      if(aSnap.exists()){
+        const d=aSnap.data();
+        if(d.artes)camps[mi].artes=d.artes;
+        if(d.fotos)camps[mi].fotos=d.fotos;
+      }
+    }
+
+    // Artes extras
+    for(let ei=0;ei<extras.length;ei++){
+      const xSnap=await getDoc(doc(db,'orcamento','xartes_'+ei));
+      if(xSnap.exists()){
+        const d=xSnap.data();
+        if(d.artes)extras[ei].artes=d.artes;
+        if(d.fotos)extras[ei].fotos=d.fotos;
+      }
+    }
+
+    renderCampanhas();
+    refreshAllHeaders();
+    updMetrics();
+    fbStatus('Firebase conectado ✓','#18b87a');
+  }catch(e){
+    console.error(e);
+    fbStatus('Erro ao carregar','#e05555');
+  }
+}
+
+// Auto-save com debounce de 3 segundos
+let fbTimer=null;
+window.autoSave=function(){
+  clearTimeout(fbTimer);
+  fbStatus('Modificado...','#f0a947');
+  fbTimer=setTimeout(()=>window.salvarFirebase(),3000);
+};
+
+// Inicia carregamento
+carregarFirebase();
 </script>
 </body>
 </html>
